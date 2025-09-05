@@ -38,7 +38,7 @@ def get_top_n_crypto_by_market_cap(n=50):
     """
     Use the CoinGecko API to fetch the top N cryptocurrencies by market capitalization.
     """
-    url = f"https://api.coingecko.com/api/v3/coins/markets"
+    url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {'vs_currency': 'usd', 'order': 'market_cap_desc', 'per_page': n, 'page': 1, 'sparkline': 'false'}
     try:
         response = requests.get(url, params=params)
