@@ -41,3 +41,11 @@ Thumbs.db
 
 # Environment variables
 .env
+
+# Data cache files
+data_cache/
+
+# Output files
+models/
+reports/
+tb/
