@@ -50,9 +50,9 @@ CONFIG = {
         "shorting": True,
         "trading_window_days": "1D",
         "sliding_window_step": "1D",
-        "lookback_window": 24,  # Reduced from 32 to just 1 day of hourly data
+        "lookback_window": 24,
         "transaction_costs": {
-            "commission_bps": 5.0,
+            "commission_bps": 4.5,
             "slippage_bps": 5.0,
         },
         "reward": {
@@ -74,8 +74,9 @@ CONFIG = {
     "SPLITS": {
         "data_start": "2024-05-01",
         "data_end": "2025-04-30",
-        "train": ["2024-05-01 00:00:00", "2024-05-04 23:59:59"],
-        "val": ["2025-01-01 00:00:00", "2025-01-31 23:59:59"],
+        "train": ["2024-05-01 00:00:00", "2024-05-04 23:59:59"],  # 8 months for training
+        "val": ["2025-01-01 00:00:00", "2025-02-28 23:59:59"],    # 2 months for validation
+        "test": ["2025-03-01 00:00:00", "2025-04-30 23:59:59"],   # 2 months for testing
     },
     "RL": {
         "timesteps": 1000, 
