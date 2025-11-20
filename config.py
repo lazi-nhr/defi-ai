@@ -52,12 +52,12 @@ CONFIG = {
         "sliding_window_step": "1D",
         "lookback_window": 24,
         "transaction_costs": {
-            "commission_bps": 4.5,
-            "slippage_bps": 5.0,
+            "commission_bps": 0,
+            "slippage_bps": 0,
         },
         "reward": {
-            "risk_lambda": 0.0001,
-            "lambda_utility": 2.0  # Risk aversion parameter for quadratic utility
+            "risk_lambda": 0.0001, # Risk aversion parameter for basic reward
+            "lambda_utility": 5  # Risk aversion parameter for quadratic utility
         },
         "leverage": {
             "use_leverage": True,
@@ -75,22 +75,26 @@ CONFIG = {
     "SPLITS": {
         "data_start": "2024-05-01",
         "data_end": "2025-04-30",
-        "train": ["2024-05-01 00:00:00", "2024-12-31 23:59:59"],  # 8 months for training
-        "val": ["2025-01-01 00:00:00", "2025-02-28 23:59:59"],    # 2 months for validation
-        "test": ["2025-03-01 00:00:00", "2025-04-30 23:59:59"],   # 2 months for testing
+        "test": ["2024-05-01 00:00:00", "2024-06-30 23:59:59"],    # 2 months for testing
+        "train": ["2024-07-01 00:00:00", "2025-02-28 23:59:59"],   # 8 months for training
+        "val": ["2025-03-01 00:00:00", "2025-04-30 23:59:59"],     # 2 months for validation
+
+        #"train": ["2024-05-01 00:00:00", "2024-12-31 23:59:59"],  # 8 months for training
+        #"val": ["2025-01-01 00:00:00", "2025-02-28 23:59:59"],    # 2 months for validation
+        #"test": ["2025-03-01 00:00:00", "2025-04-30 23:59:59"],   # 2 months for testing
     },
     "RL": {
         "timesteps": 1e6, # 1e6 - 3e6
         "policy": "MlpPolicy",
         "gamma": 0.995,
-        "gae_lambda": 0.95,
-        "clip_range": 0.4,
-        "n_steps": 8192,
-        "batch_size": 256,
-        "learning_rate": 1e-3,
-        "ent_coef": 0.2,
-        "vf_coef": 0.5,
-        "max_grad_norm": 0.5
+        "gae_lambda": 0.92,
+        "clip_range": 0.25,
+        "n_steps": 1440,  # 1 day of steps for 1m data
+        "batch_size": 360,  # 25% of n_steps
+        "learning_rate": 1e-4,
+        "ent_coef": 0.05,
+        "vf_coef": 0.7,
+        "max_grad_norm": 0.5,
     },
     "EVAL": {
         "plots": True,
