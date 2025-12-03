@@ -58,23 +58,23 @@ CONFIG = {
     "RL": {
         # ===== General (All Algorithms) =====
         "algorithm": "SAC",  # "SAC", "PPO", or "DQN"
-        "timesteps": 2e6,  # Total training timesteps (1e6 - 3e6)
+        "timesteps": 4e6,  # Total training timesteps (1e6 - 3e6)
         "policy": "MlpPolicy",  # Policy network architecture
         "gamma": 0.99,  # Discount factor for future rewards
-        "learning_rate": 3e-4,  # Learning rate for optimizer
+        "learning_rate": 1e-4,  # Learning rate for optimizer (reduced for stability)
         "batch_size": 64,  # Batch size for training updates
         
         # ===== PPO (On-Policy) =====
         "gae_lambda": 0.95,  # GAE lambda for advantage estimation
-        "clip_range": 0.2,  # PPO clipping range for policy updates
+        "clip_range": 0.1,  # PPO clipping range for policy updates
         "n_steps": 2048,  # Number of steps to collect before update
         "n_epochs": 10,  # Number of epochs for policy optimization
-        #"ent_coef": 0.01,  # Entropy coefficient for exploration (PPO-specific, conflicts with SAC)
+        "ent_coef": 0.1,  # Entropy coefficient for exploration (PPO-specific, conflicts with SAC)
         "vf_coef": 0.5,  # Value function loss coefficient
         "max_grad_norm": 0.5,  # Maximum gradient norm for clipping
         
         # ===== SAC (Off-Policy, Continuous) =====
-        "ent_coef": "auto",  # Automatic entropy tuning for better exploration
+        #"ent_coef": "auto",  # Automatic entropy tuning for better exploration
         "buffer_size": 200000,  # Larger replay buffer for more diverse experiences
         "learning_starts": 5000,  # Collect more random experiences before learning
         "tau": 0.005,  # Soft update coefficient for target networks
@@ -97,7 +97,7 @@ CONFIG = {
         "reports_dir": "./reports",
         "frequency": 14400,  # Evaluate every 14,400 steps
         "n_eval_episodes": 1,  # Number of episodes to run during evaluation (default: 5)
-        "save_freq": 100000,
+        "save_freq": 144000,
     },
     "IO": {
         "models_dir": "./models",
