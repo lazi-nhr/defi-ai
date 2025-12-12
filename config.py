@@ -34,7 +34,7 @@ CONFIG = {
         "sliding_window_step": "1D",
         "lookback_window": 20, # context
         "transaction_costs": {
-            "taker_bps": 0, # fee based on hyperliquid tier system (0.0144% to 0.045%)
+            "taker_bps": 4.5, # fee based on hyperliquid tier system (0.0144% to 0.045%)
             "maker_bps": 1.0, # rebates (not implemented)
             "slippage_bps": 0, # slippage
         },
