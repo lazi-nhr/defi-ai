@@ -1,6 +1,21 @@
 {
-  "timestamp": "",
-  "interval": "1h",
-  "top_k": 0,
-  "pairs": []
+  "ranked_pairs": [
+    {
+      "alpha": 2.8505580719373147,
+      "asset1": "AVAX",
+      "asset2": "ARB",
+      "beta": 52.96820313817038,
+      "corr": 0.9534981208340625,
+      "p_value": 0.0009018676469718643,
+      "score": 0.9534981208340625
+    }
+  ],
+  "selected_pair": {
+    "asset1": "AVAX",
+    "asset2": "ARB"
+  },
+  "selected_pair_meta": {
+    "alpha": 2.8505580719373147,
+    "beta": 52.96820313817038
+  }
 }
