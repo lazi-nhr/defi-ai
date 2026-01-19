@@ -49,11 +49,11 @@ binance_data/
 
 # Output files
 reports/
+results/
 tb/
 tb_logs/
 
 archive/
 
 d3rlpy_logs/
-results/
 ./data_cache
