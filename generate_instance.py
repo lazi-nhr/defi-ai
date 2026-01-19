@@ -8,7 +8,7 @@ import ta
 from pykalman import KalmanFilter
 from datetime import datetime
 
-# Import the logic from your other file
+# Import the logic from other file
 try:
     from inference_rl import generate_signal_from_features
 except ImportError:
