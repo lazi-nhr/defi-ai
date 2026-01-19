@@ -22,7 +22,7 @@ OUTPUT_FILE = "signal.json"
 ASSET1 = "ETH"
 ASSET2 = "BTC"
 TIMEFRAME = "1h"
-LOOKBACK = 30  # Must match your model's training lookback
+LOOKBACK = 30  # Must match model's training lookback
 
 # ================= DEBUGGING PRINT =================
 print(f"--- INITIALIZING GENERATOR FOR {ASSET1}-{ASSET2} ---")
