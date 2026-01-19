@@ -39,8 +39,6 @@ All experiments explicitly incorporate transaction costs and realistic execution
 
 Raw market data is transformed into a consistent state representation suitable for reinforcement learning:
 
-- Time alignment to a fixed 1-minute grid  
-- Forward-filling and removal of missing values  
 - Rolling-window cointegration testing (Engle–Granger)  
 - Construction of spread-based features (z-scores, volatility, Kalman-filtered signals)  
 - Asset-level technical indicators (RSI, MACD, momentum, volatility)  
