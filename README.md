@@ -7,7 +7,7 @@ The repository is organized around **two main pipelines**:
 1. **Reinforcement Learning Training & Evaluation**
 2. **AI Agent Deployment & Orchestration**
 
----
+
 
 ## 1. Reinforcement Learning Training Pipeline
 
@@ -24,7 +24,7 @@ The training pipeline follows a structured sequence:
 
 All experiments explicitly incorporate transaction costs and realistic execution assumptions.
 
----
+
 
 ### 1.1 Data Acquisition
 
@@ -33,7 +33,9 @@ All experiments explicitly incorporate transaction costs and realistic execution
 - The dataset spans **May 2024 – April 2025**.
 - Asset selection is restricted to instruments tradable on both Binance and Hyperliquid to ensure deployability.
 
----
+All related code can be found in the `data_acquisition` folder.
+
+
 
 ### 1.2 Data Preprocessing & Feature Engineering
 
@@ -41,13 +43,15 @@ Raw market data is transformed into a consistent state representation suitable f
 
 - Rolling-window cointegration testing (Engle–Granger)  
 - Construction of spread-based features (z-scores, volatility, Kalman-filtered signals)  
-- Asset-level technical indicators (RSI, MACD, momentum, volatility)  
-- Funding-rate features specific to perpetual futures  
-- Portfolio state variables (current exposure and cash)  
+- Asset-level technical indicators (RSI, MACD, momentum, volatility)
+- Funding-rate features specific to perpetual futures
+- Portfolio state variables (current exposure and cash)
 
 The resulting feature vectors form the state space of the RL environment.
 
----
+All related code can be found in the `data_preprocessing` folder.
+
+
 
 ### 1.3 Reinforcement Learning Training
 
@@ -57,9 +61,14 @@ The resulting feature vectors form the state space of the RL environment.
 - The reward function is based on **quadratic utility**, balancing returns and risk while explicitly accounting for transaction costs.
 - Training is performed offline over multiple million timesteps using Stable-Baselines3.
 
----
+All related code can be found in the `rl_training.ipynb` file inside the `rl_training` folder.
+The `config.py` file is used to configure hyperparameters and experiment settings.
+
+
 
 ### 1.4 Evaluation & Results
+
+Evaluation happens at the end of the `rl_training.py` file.
 
 - Models are evaluated **out-of-sample** on a held-out test set.
 - Performance is compared across multiple transaction fee regimes:
@@ -69,7 +78,7 @@ The resulting feature vectors form the state space of the RL environment.
 - Metrics include cumulative return, volatility, Sharpe ratio, drawdown, and action statistics.
 - Results show that transaction costs are a key limiting factor for high-frequency RL-based statistical arbitrage.
 
----
+
 
 ## 2. AI Agent Deployment Pipeline
 
@@ -77,7 +86,14 @@ The second pipeline implements a **proof of concept AI agent** for coordinating 
 
 This pipeline focuses on **orchestration and automation**, not on improving trading performance.
 
----
+Following are the key components:
+
+- Pair selection: correlation filtering + Engle–Granger cointegration (OLS + ADF) over a configurable universe.
+- Trading tick: Hyperliquid candle polling → pair feature engineering → PPO inference → atomic `signal.json`.
+- Execution: Hummingbot watches `signal.json` and executes orders when it changes.
+- LangSmith: trace boundaries and metadata are emitted to enable automation rules (pause, switch pair, retrain).
+
+
 
 ### 2.1 Agent Architecture
 
@@ -97,7 +113,8 @@ The system is split into two decoupled workflows:
 
 All coordination occurs via explicit, versioned artifacts.
 
----
+The relevant code can be found in the `ai-agent` folder.
+
 
 ### 2.2 Execution Layer
 
@@ -106,25 +123,47 @@ All coordination occurs via explicit, versioned artifacts.
 - Execution logic is isolated from model inference and orchestration
 - The system is containerized using Docker for reproducibility
 
----
+The relevant code can be found in the `execution` folder.
 
-### 2.3 Scope and Limitations
 
-- The AI agent is intended as a **systems-level proof of concept**
-- No online fine-tuning, continual learning, or automated retraining is implemented
-- LangGraph and LangSmith provide orchestration and observability only
-- Economic constraints (fees, liquidity, latency) remain binding regardless of automation
+### Quick start
 
----
+1. Install dependencies:
 
-## Reproducibility
+```bash
+pip install -r requirements.txt
+```
 
-- All experiments are configured via versioned configuration files
-- Dependencies are fixed and documented
-- Evaluation artifacts and logs are retained for inspection
-- The codebase is designed to support systematic experimentation and extension
+2. Configure environment (optional but recommended):
 
----
+```bash
+cp .env.example .env
+```
+
+3. Run pair selection (recommended every 6–24h):
+
+```bash
+python scripts/run_pair_selection.py --top-k 5
+```
+
+4. Run the live trading tick loop:
+
+```bash
+python scripts/run_live_loop.py --tick-seconds 60
+```
+
+5. (Optional) Run the automation webhook server used by LangSmith automations:
+
+```bash
+python scripts/run_webhook_server.py --host 0.0.0.0 --port 8080
+```
+
+6. Files written:
+
+- `artifacts/pairs/active_pairs.json`: ranked list of the current best cointegrated pairs.
+- `signal.json`: atomic signal output consumed by Hummingbot.
+- `artifacts/control/control.json`: runtime control overlay (pause, force pair, switch model).
+
 
 ## Disclaimer
 
