@@ -370,4 +370,315 @@ def pair_selection(state):
     return state
 
 
+# ---------------------------
+# Control plane nodes (no webhooks)
+# ---------------------------
+
+from typing import Literal, Tuple
+
+WatcherDecision = Literal[
+    "KEEP_TRADING",
+    "TRIGGER_SLOW_TICK_RESELECT",
+    "TRIGGER_RL_FINETUNE",
+    "PAUSE_PAIR",
+]
+
+
+def _get_control_int(state: AgentState, key: str, default: int) -> int:
+    try:
+        return int((state.control or {}).get(key, default))
+    except Exception:
+        return default
+
+
+def _get_control_float(state: AgentState, key: str, default: float) -> float:
+    try:
+        return float((state.control or {}).get(key, default))
+    except Exception:
+        return default
+
+
+def _control_set(state: AgentState, key: str, value: Any) -> None:
+    if state.control is None:
+        state.control = {}
+    state.control[key] = value
+
+
+def _control_get(state: AgentState, key: str, default: Any = None) -> Any:
+    if state.control is None:
+        state.control = {}
+    return state.control.get(key, default)
+
+
+def _load_perf_snapshot() -> Dict[str, Any]:
+    """
+    Minimal performance input interface.
+
+    If you already have a simulator / paper engine, have it write a JSON file that this node reads.
+
+    Default path: artifacts/perf/perf_snapshot.json
+    You can override via PERF_SNAPSHOT_PATH env var.
+    """
+    perf_path = Path(get_env("PERF_SNAPSHOT_PATH", str(ARTIFACTS_DIR / "perf" / "perf_snapshot.json")))
+    return _read_json(perf_path) or {}
+
+
+@traceable(name="metrics_rollup")
+def metrics_rollup(state: AgentState) -> AgentState:
+    """
+    Reads a lightweight performance snapshot and stores a "rollup" in state.control.
+
+    Expected (example) perf snapshot JSON shape:
+      {
+        "ts_ms": 123,
+        "pair": "BTC-ETH",
+        "window": "6h",
+        "pnl_usd": -12.3,
+        "pnl_pct": -0.8,
+        "trades": 42,
+        "winrate": 0.43,
+        "max_drawdown_pct": 1.7,
+        "avg_slippage_bps": 9.2,
+        "fill_rate": 0.98,
+        "avg_latency_ms": 120
+      }
+
+    If the file is absent, the node is a safe no-op (rollup defaults).
+    """
+    snap = _load_perf_snapshot()
+
+    # Default rollup if no perf exists yet (keeps pipeline stable)
+    rollup = {
+        "ts_ms": int(snap.get("ts_ms", _now_ms())),
+        "pair": str(snap.get("pair", getattr(state, "pair", "") or "")),
+        "window": str(snap.get("window", "6h")),
+        "pnl_usd": float(snap.get("pnl_usd", 0.0)),
+        "pnl_pct": float(snap.get("pnl_pct", 0.0)),
+        "trades": int(snap.get("trades", 0)),
+        "winrate": float(snap.get("winrate", 0.0)),
+        "max_drawdown_pct": float(snap.get("max_drawdown_pct", 0.0)),
+        "avg_slippage_bps": float(snap.get("avg_slippage_bps", 0.0)),
+        "fill_rate": float(snap.get("fill_rate", 0.0)),
+        "avg_latency_ms": float(snap.get("avg_latency_ms", 0.0)),
+    }
+
+    _control_set(state, "perf_rollup", rollup)
+    return state
+
+
+@traceable(name="watcher_eval")
+def watcher_eval(state: AgentState) -> AgentState:
+    """
+    ChatOllama watcher that recommends whether to keep trading,
+    re-run slow tick selection, request RL finetuning, or pause the pair.
+
+    Output written to state.control["watcher_verdict"] as JSON-safe dict:
+      {
+        "decision": "...",
+        "confidence": 0.0-1.0,
+        "reasons": [ ... ],
+      }
+    """
+    llm = _get_llm()
+
+    rollup = _control_get(state, "perf_rollup", {}) or {}
+    sel = _control_get(state, "selected_pair", {"asset1": "BTC", "asset2": "ETH"})
+    pair = getattr(state, "pair", f"{sel.get('asset1','')}-{sel.get('asset2','')}")
+
+    # Guardrails: enforce schema; watcher must choose from fixed decisions.
+    prompt = (
+        "You are a trading performance watchdog for a pairs trading system.\n"
+        "You do NOT execute trades. You only recommend the next control action.\n\n"
+        "Return ONLY a single-line JSON object with keys:\n"
+        "  decision: one of [KEEP_TRADING, TRIGGER_SLOW_TICK_RESELECT, TRIGGER_RL_FINETUNE, PAUSE_PAIR]\n"
+        "  confidence: number between 0 and 1\n"
+        "  reasons: array of short strings\n\n"
+        f"PAIR: {pair}\n"
+        f"ROLLUP: {json.dumps(rollup, sort_keys=True)}\n"
+        f"RISK_FLAG_FROM_LLM_ASSIST: {bool((getattr(state, 'llm_advice', {}) or {}).get('risk_flag', False))}\n"
+    )
+
+    raw = llm.invoke(prompt) if hasattr(llm, "invoke") else llm(prompt)
+    txt = raw if isinstance(raw, str) else str(raw)
+
+    verdict = {
+        "decision": "KEEP_TRADING",
+        "confidence": 0.0,
+        "reasons": ["default_no_data"],
+        "raw": txt,
+    }
+
+    try:
+        parsed = json.loads(txt.strip())
+        if isinstance(parsed, dict):
+            decision = str(parsed.get("decision", "KEEP_TRADING")).strip()
+            confidence = float(parsed.get("confidence", 0.0))
+            reasons = parsed.get("reasons", [])
+            if decision in (
+                "KEEP_TRADING",
+                "TRIGGER_SLOW_TICK_RESELECT",
+                "TRIGGER_RL_FINETUNE",
+                "PAUSE_PAIR",
+            ):
+                verdict["decision"] = decision
+            verdict["confidence"] = max(0.0, min(1.0, confidence))
+            verdict["reasons"] = reasons if isinstance(reasons, list) else [str(reasons)]
+    except Exception:
+        # keep defaults, preserve raw
+        pass
+
+    _control_set(state, "watcher_verdict", verdict)
+    return state
+
+
+@traceable(name="governor")
+def governor(state: AgentState) -> AgentState:
+    """
+    Applies hysteresis + cooldown and outputs an authorized action in:
+      state.control["governor_action"]
+
+    Configuration keys (all optional, via control.json or env injected into state.control):
+      watcher_interval_s (default 600)
+      reselection_cooldown_s (default 21600)  # 6h
+      finetune_cooldown_s (default 86400)     # 24h
+      pause_on_confidence_ge (default 0.85)
+      min_confidence_to_act (default 0.60)
+      consecutive_breach_required (default 2)
+
+    State keys used (stored in control):
+      governor_last_eval_ms
+      governor_last_reselect_ms
+      governor_last_finetune_ms
+      governor_consecutive_breaches
+    """
+    now = _now_ms()
+
+    watcher_interval_s = _get_control_int(state, "watcher_interval_s", 600)
+    last_eval = _get_control_int(state, "governor_last_eval_ms", 0)
+    if last_eval and (now - last_eval) < watcher_interval_s * 1000:
+        # Not time yet: explicitly set KEEP_TRADING and return
+        _control_set(state, "governor_action", "KEEP_TRADING")
+        _control_set(state, "governor_skipped", True)
+        return state
+
+    _control_set(state, "governor_last_eval_ms", now)
+    _control_set(state, "governor_skipped", False)
+
+    verdict = _control_get(state, "watcher_verdict", {}) or {}
+    decision = str(verdict.get("decision", "KEEP_TRADING"))
+    conf = float(verdict.get("confidence", 0.0))
+
+    min_conf = _get_control_float(state, "min_confidence_to_act", 0.60)
+    pause_on_conf = _get_control_float(state, "pause_on_confidence_ge", 0.85)
+
+    reselection_cooldown_s = _get_control_int(state, "reselection_cooldown_s", 6 * 3600)
+    finetune_cooldown_s = _get_control_int(state, "finetune_cooldown_s", 24 * 3600)
+    last_reselect = _get_control_int(state, "governor_last_reselect_ms", 0)
+    last_finetune = _get_control_int(state, "governor_last_finetune_ms", 0)
+
+    consecutive_required = _get_control_int(state, "consecutive_breach_required", 2)
+    consecutive = _get_control_int(state, "governor_consecutive_breaches", 0)
+
+    # Hard override: PAUSE if watcher says pause with high confidence
+    if decision == "PAUSE_PAIR" and conf >= pause_on_conf:
+        _control_set(state, "governor_action", "PAUSE_PAIR")
+        _control_set(state, "governor_consecutive_breaches", 0)
+        return state
+
+    # If confidence too low, do nothing
+    if conf < min_conf:
+        _control_set(state, "governor_action", "KEEP_TRADING")
+        _control_set(state, "governor_consecutive_breaches", 0)
+        return state
+
+    # Hysteresis: count breaches for non-KEEP decisions
+    if decision in ("TRIGGER_SLOW_TICK_RESELECT", "TRIGGER_RL_FINETUNE", "PAUSE_PAIR"):
+        consecutive += 1
+    else:
+        consecutive = 0
+    _control_set(state, "governor_consecutive_breaches", consecutive)
+
+    if consecutive < consecutive_required:
+        _control_set(state, "governor_action", "KEEP_TRADING")
+        return state
+
+    # Cooldowns for reselection/fine-tune
+    if decision == "TRIGGER_SLOW_TICK_RESELECT":
+        if last_reselect and (now - last_reselect) < reselection_cooldown_s * 1000:
+            _control_set(state, "governor_action", "KEEP_TRADING")
+            return state
+        _control_set(state, "governor_last_reselect_ms", now)
+        _control_set(state, "governor_action", "TRIGGER_SLOW_TICK_RESELECT")
+        _control_set(state, "governor_consecutive_breaches", 0)
+        return state
+
+    if decision == "TRIGGER_RL_FINETUNE":
+        if last_finetune and (now - last_finetune) < finetune_cooldown_s * 1000:
+            _control_set(state, "governor_action", "KEEP_TRADING")
+            return state
+        _control_set(state, "governor_last_finetune_ms", now)
+        _control_set(state, "governor_action", "TRIGGER_RL_FINETUNE")
+        _control_set(state, "governor_consecutive_breaches", 0)
+        return state
+
+    if decision == "PAUSE_PAIR":
+        # Lower-confidence pause (not "hard") still allowed after hysteresis
+        _control_set(state, "governor_action", "PAUSE_PAIR")
+        _control_set(state, "governor_consecutive_breaches", 0)
+        return state
+
+    _control_set(state, "governor_action", "KEEP_TRADING")
+    return state
+
+
+@traceable(name="apply_governor_action")
+def apply_governor_action(state: AgentState) -> AgentState:
+    """
+    Executes the authorized action locally (no webhooks):
+      - RESELECT -> runs pair_selection() and updates ACTIVE_PAIRS_PATH (your existing node)
+      - FINETUNE -> records a finetune request artifact flag (you wire training separately)
+      - PAUSE    -> sets control flag and writes a pause artifact
+
+    This node is safe to call every tick; it only performs side effects when governor_action != KEEP_TRADING.
+    """
+    action = str(_control_get(state, "governor_action", "KEEP_TRADING"))
+
+    if action == "TRIGGER_SLOW_TICK_RESELECT":
+        # Re-use your existing slow tick implementation
+        state = pair_selection(state)
+        _control_set(state, "last_control_action", {"ts_ms": _now_ms(), "action": action})
+        return state
+
+    if action == "TRIGGER_RL_FINETUNE":
+        # Minimal PoC: emit a training request artifact; your trainer picks it up.
+        req_path = ARTIFACTS_DIR / "rl" / "finetune_request.json"
+        payload = {
+            "ts_ms": _now_ms(),
+            "pair": getattr(state, "pair", ""),
+            "selected_pair": _control_get(state, "selected_pair", None),
+            "selected_pair_meta": _control_get(state, "selected_pair_meta", None),
+            "perf_rollup": _control_get(state, "perf_rollup", None),
+            "watcher_verdict": _control_get(state, "watcher_verdict", None),
+        }
+        _write_json(req_path, _json_safe(payload))
+        _control_set(state, "finetune_requested", True)
+        _control_set(state, "last_control_action", {"ts_ms": _now_ms(), "action": action})
+        return state
+
+    if action == "PAUSE_PAIR":
+        pause_path = ARTIFACTS_DIR / "control" / "pause.json"
+        payload = {
+            "ts_ms": _now_ms(),
+            "pair": getattr(state, "pair", ""),
+            "reason": _control_get(state, "watcher_verdict", {}),
+        }
+        _write_json(pause_path, _json_safe(payload))
+        _control_set(state, "paused", True)
+        _control_set(state, "last_control_action", {"ts_ms": _now_ms(), "action": action})
+        return state
+
+    return state
+
+
+
 
