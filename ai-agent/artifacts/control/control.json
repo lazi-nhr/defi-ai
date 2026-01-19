@@ -1,0 +1,10 @@
+{
+  "watcher_interval_s": 600,
+  "min_confidence_to_act": 0.6,
+  "consecutive_breach_required": 2,
+  "reselection_cooldown_s": 21600,
+  "finetune_cooldown_s": 86400,
+  "pause_on_confidence_ge": 0.85,
+
+  "paused": false
+}

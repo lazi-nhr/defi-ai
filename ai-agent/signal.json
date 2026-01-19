@@ -1,0 +1,35 @@
+{
+  "decision": {
+    "bar_timeframe": "1h",
+    "debug": {
+      "llm": {
+        "note": "content='{\\n\"note\": \"RL decision accepted\",\\n\"risk_flag\": false\\n}' additional_kwargs={} response_metadata={'model': 'llama3', 'created_at': '2026-01-19T12:36:49.1967461Z', 'done': True, 'done_reason': 'stop', 'total_duration': 645532200, 'load_duration': 112263000, 'prompt_eval_count': 192, 'prompt_eval_duration': 253261700, 'eval_count': 17, 'eval_duration': 231610600, 'logprobs': None, 'model_name': 'llama3', 'model_provider': 'ollama'} id='lc_run--ae1ea267-9b6a-4a8f-bd7e-8f35cae833eb-0' usage_metadata={'input_tokens': 192, 'output_tokens': 17, 'total_tokens': 209}",
+        "risk_flag": false
+      },
+      "raw_action": 0.009464231319725513
+    },
+    "fresh_for_seconds": 3600,
+    "markets": {
+      "asset1": "BTC-USDT",
+      "asset2": "ETH-USDT",
+      "exchange": "binance_perpetual"
+    },
+    "notional_usd": 100.0,
+    "pair": {
+      "asset1": "BTC",
+      "asset2": "ETH"
+    },
+    "timestamp": "2026-01-19T12:36:45Z",
+    "version": 1,
+    "weights": {
+      "asset1": 0.004732115659862757,
+      "asset2": -0.004732115659862757
+    }
+  },
+  "llm_backend": "local",
+  "llm_model_id": "local-llama",
+  "pair": "BTC-ETH",
+  "risk_passed": true,
+  "risk_reason": "",
+  "ts_ms": 1768826209206
+}
